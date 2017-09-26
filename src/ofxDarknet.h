@@ -36,6 +36,7 @@
 #include "utils.h"
 #include "nightmare.h"
 #include "rnn.h"
+#include "darknet.h"
 
 #include "ofxOpenCv.h"
 
@@ -79,11 +80,12 @@ public:
     std::vector< classification > classify( ofPixels & pix, int count = 5 );
     std::vector< detected_object > yolo( ofPixels & pix, float threshold = 0.24f, float maxOverlap = 0.5f );
     std::vector< activations > getFeatureMaps(int idxLayer);
+    // float * get_network_output_layer_gpu(int i);
     float * get_network_output_layer_gpu(int i);
 
     ofImage nightmare( ofPixels & pix, int max_layer, int range, int norm, int rounds, int iters, int octaves, float rate, float thresh );
-    std::string rnn( int num, std::string seed, float temp );
-	void train_rnn( std::string textfile, std::string cfgfile );
+ //    std::string rnn( int num, std::string seed, float temp );
+	// void train_rnn( std::string textfile, std::string cfgfile );
     
     network & getNetwork() {return net;}
     vector<string> getLayerNames() {return layerNames;}

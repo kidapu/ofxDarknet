@@ -402,6 +402,9 @@ enum
 
 typedef unsigned char stbi_uc;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifdef STB_IMAGE_STATIC
 #define STBIDEF static
@@ -420,7 +423,7 @@ typedef unsigned char stbi_uc;
 
 typedef struct
 {
-   int      (*read)  (void *user,char *data1,int size);   // fill 'data' with 'size' bytes.  return number of bytes actually read
+   int      (*read)  (void *user,char *data,int size);   // fill 'data' with 'size' bytes.  return number of bytes actually read
    void     (*skip)  (void *user,int n);                 // skip the next 'n' bytes, or 'unget' the last -n bytes if negative
    int      (*eof)   (void *user);                       // returns nonzero if we are at end of file/data
 } stbi_io_callbacks;
@@ -504,6 +507,10 @@ STBIDEF int   stbi_zlib_decode_buffer(char *obuffer, int olen, const char *ibuff
 STBIDEF char *stbi_zlib_decode_noheader_malloc(const char *buffer, int len, int *outlen);
 STBIDEF int   stbi_zlib_decode_noheader_buffer(char *obuffer, int olen, const char *ibuffer, int ilen);
 
+
+#ifdef __cplusplus
+}
+#endif
 
 //
 //
@@ -1460,7 +1467,7 @@ typedef struct
       int dc_pred;
 
       int x,y,w2,h2;
-      stbi_uc *data1;
+      stbi_uc *data;
       void *raw_data, *raw_coeff;
       stbi_uc *linebuf;
       short   *coeff;   // progressive only
@@ -1483,7 +1490,7 @@ typedef struct
    int restart_interval, todo;
 
 // kernels
-   void (*idct_block_kernel)(stbi_uc *out, int out_stride, short data1[64]);
+   void (*idct_block_kernel)(stbi_uc *out, int out_stride, short data[64]);
    void (*YCbCr_to_RGB_kernel)(stbi_uc *out, const stbi_uc *y, const stbi_uc *pcb, const stbi_uc *pcr, int count, int step);
    stbi_uc *(*resample_row_hv_2_kernel)(stbi_uc *out, stbi_uc *in_near, stbi_uc *in_far, int w, int hs);
 } stbi__jpeg;
@@ -2436,7 +2443,7 @@ static int stbi__parse_entropy_coded_data(stbi__jpeg *z)
             for (i=0; i < w; ++i) {
                int ha = z->img_comp[n].ha;
                if (!stbi__jpeg_decode_block(z, data, z->huff_dc+z->img_comp[n].hd, z->huff_ac+ha, z->fast_ac[ha], n, z->dequant[z->img_comp[n].tq])) return 0;
-               z->idct_block_kernel(z->img_comp[n].data1+z->img_comp[n].w2*j*8+i*8, z->img_comp[n].w2, data);
+               z->idct_block_kernel(z->img_comp[n].data+z->img_comp[n].w2*j*8+i*8, z->img_comp[n].w2, data);
                // every data block is an MCU, so countdown the restart interval
                if (--z->todo <= 0) {
                   if (z->code_bits < 24) stbi__grow_buffer_unsafe(z);
@@ -2464,7 +2471,7 @@ static int stbi__parse_entropy_coded_data(stbi__jpeg *z)
                         int y2 = (j*z->img_comp[n].v + y)*8;
                         int ha = z->img_comp[n].ha;
                         if (!stbi__jpeg_decode_block(z, data, z->huff_dc+z->img_comp[n].hd, z->huff_ac+ha, z->fast_ac[ha], n, z->dequant[z->img_comp[n].tq])) return 0;
-                        z->idct_block_kernel(z->img_comp[n].data1+z->img_comp[n].w2*y2+x2, z->img_comp[n].w2, data);
+                        z->idct_block_kernel(z->img_comp[n].data+z->img_comp[n].w2*y2+x2, z->img_comp[n].w2, data);
                      }
                   }
                }
@@ -2561,7 +2568,7 @@ static void stbi__jpeg_finish(stbi__jpeg *z)
             for (i=0; i < w; ++i) {
                short *data = z->img_comp[n].coeff + 64 * (i + j * z->img_comp[n].coeff_w);
                stbi__jpeg_dequantize(data, z->dequant[z->img_comp[n].tq]);
-               z->idct_block_kernel(z->img_comp[n].data1+z->img_comp[n].w2*j*8+i*8, z->img_comp[n].w2, data);
+               z->idct_block_kernel(z->img_comp[n].data+z->img_comp[n].w2*j*8+i*8, z->img_comp[n].w2, data);
             }
          }
       }
@@ -2683,7 +2690,7 @@ static int stbi__process_frame_header(stbi__jpeg *z, int scan)
    if (c != 3 && c != 1) return stbi__err("bad component count","Corrupt JPEG");    // JFIF requires
    s->img_n = c;
    for (i=0; i < c; ++i) {
-      z->img_comp[i].data1 = NULL;
+      z->img_comp[i].data = NULL;
       z->img_comp[i].linebuf = NULL;
    }
 
@@ -2732,12 +2739,12 @@ static int stbi__process_frame_header(stbi__jpeg *z, int scan)
       if (z->img_comp[i].raw_data == NULL) {
          for(--i; i >= 0; --i) {
             STBI_FREE(z->img_comp[i].raw_data);
-            z->img_comp[i].data1 = NULL;
+            z->img_comp[i].data = NULL;
          }
          return stbi__err("outofmem", "Out of memory");
       }
       // align blocks for idct using mmx/sse
-      z->img_comp[i].data1 = (stbi_uc*) (((size_t) z->img_comp[i].raw_data + 15) & ~15);
+      z->img_comp[i].data = (stbi_uc*) (((size_t) z->img_comp[i].raw_data + 15) & ~15);
       z->img_comp[i].linebuf = NULL;
       if (z->progressive) {
          z->img_comp[i].coeff_w = (z->img_comp[i].w2 + 7) >> 3;
@@ -3257,7 +3264,7 @@ static void stbi__cleanup_jpeg(stbi__jpeg *j)
       if (j->img_comp[i].raw_data) {
          STBI_FREE(j->img_comp[i].raw_data);
          j->img_comp[i].raw_data = NULL;
-         j->img_comp[i].data1 = NULL;
+         j->img_comp[i].data = NULL;
       }
       if (j->img_comp[i].raw_coeff) {
          STBI_FREE(j->img_comp[i].raw_coeff);
@@ -3322,7 +3329,7 @@ static stbi_uc *load_jpeg_image(stbi__jpeg *z, int *out_x, int *out_y, int *comp
          r->ystep   = r->vs >> 1;
          r->w_lores = (z->s->img_x + r->hs-1) / r->hs;
          r->ypos    = 0;
-         r->line0   = r->line1 = z->img_comp[k].data1;
+         r->line0   = r->line1 = z->img_comp[k].data;
 
          if      (r->hs == 1 && r->vs == 1) r->resample = resample_row_1;
          else if (r->hs == 1 && r->vs == 2) r->resample = stbi__resample_row_v_2;
